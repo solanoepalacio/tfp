@@ -1,7 +1,7 @@
-"""Pull NYC TLC yellow taxi trip records for a range of months and store them as CSV.
+"""Pull NYC TLC yellow taxi trip records for a range of months and store them as parquet (or CSV with --csv).
 
 Usage:
-    uv run pull_trip_data --from 2022-02 --to 2023-03 [--out-dir data/raw]
+    uv run pull_trip_data --from 2022-02 --to 2023-03 [--out-dir data/raw] [--csv]
 """
 
 import argparse
@@ -34,11 +34,15 @@ def month_range(start: str, end: str) -> list[date]:
     return months
 
 
-def pull_month(month: date, out_dir: Path) -> Path:
+def pull_month(month: date, out_dir: Path, csv: bool = False) -> Path:
     name = f"yellow_tripdata_{month:%Y-%m}"
     df = pd.read_parquet(f"{BASE_URL}/{name}.parquet")
-    out_path = out_dir / f"{name}.csv"
-    df.to_csv(out_path, index=False)
+    if csv:
+        out_path = out_dir / f"{name}.csv"
+        df.to_csv(out_path, index=False)
+    else:
+        out_path = out_dir / f"{name}.parquet"
+        df.to_parquet(out_path, index=False)
     return out_path
 
 
@@ -49,6 +53,7 @@ def main() -> None:
     parser.add_argument("--from", dest="start", required=True, help="first month to pull (YYYY-MM)")
     parser.add_argument("--to", dest="end", required=True, help="last month to pull, inclusive (YYYY-MM)")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR, help=f"default: {DEFAULT_OUT_DIR}")
+    parser.add_argument("--csv", action="store_true", help="store as CSV instead of parquet")
     args = parser.parse_args()
 
     try:
@@ -61,7 +66,7 @@ def main() -> None:
     for month in months:
         print(f"downloading {month:%Y-%m}", flush=True)
         try:
-            out_path = pull_month(month, args.out_dir)
+            out_path = pull_month(month, args.out_dir, csv=args.csv)
             logger.info("%s: saved to %s", f"{month:%Y-%m}", out_path)
         except Exception as e:
             logger.error("%s: failed to pull: %s", f"{month:%Y-%m}", e)
